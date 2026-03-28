@@ -243,24 +243,31 @@ export default function App() {
       <div className="flex justify-center gap-2 mb-8 sticky top-4 z-50">
         <div className="bg-white/80 backdrop-blur-md p-1.5 rounded-full border border-slate-200 shadow-xl flex gap-1">
           {[
-            { id: 'nhap-lieu', label: 'Nhập liệu', icon: PenSquare },
-            { id: 'ma-tran', label: 'Ma trận', icon: Layout },
-            { id: 'dac-ta', label: 'Ma trận đặc tả', icon: ListChecks },
-            { id: 'tao-de', label: 'Tạo đề', icon: FileJson }
-          ].map(tab => (
-            <button 
-              key={tab.id} 
-              onClick={() => setActiveTab(tab.id)} 
-              className={cn(
-                "px-6 py-2 rounded-full font-bold text-sm transition-all flex items-center gap-2",
-                activeTab === tab.id 
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200" 
-                  : "text-slate-500 hover:bg-slate-100"
-              )}
-            >
-              <tab.icon className="w-4 h-4" />
-              {tab.label}
-            </button>
+            { id: 'nhap-lieu', label: 'Nhập liệu', icon: PenSquare, step: 1 },
+            { id: 'ma-tran', label: 'Ma trận', icon: Layout, step: 2 },
+            { id: 'dac-ta', label: 'Ma trận đặc tả', icon: ListChecks, step: 3 },
+            { id: 'tao-de', label: 'Tạo đề', icon: FileJson, step: 4 }
+          ].map((tab, idx, arr) => (
+            <>
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  "px-5 py-2 rounded-full font-bold text-sm transition-all flex items-center gap-2",
+                  activeTab === tab.id
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200"
+                    : "text-slate-500 hover:bg-slate-100"
+                )}
+              >
+                <span className={cn(
+                  "w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-black",
+                  activeTab === tab.id ? "bg-white/20 text-white" : "bg-slate-100 text-slate-400"
+                )}>{tab.step}</span>
+                <tab.icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+              {idx < arr.length - 1 && <span className="flex items-center text-slate-200 text-xs px-1">›</span>}
+            </>
           ))}
         </div>
       </div>
@@ -276,11 +283,12 @@ export default function App() {
               tuDongPhanBoMoi={tuDongPhanBoMoi}
               addChuong={addChuong}
               removeChuong={removeChuong}
+              onNext={() => setActiveTab('ma-tran')}
             />
           )}
-          {activeTab === 'ma-tran' && <TabMaTran key="ma-tran" data={data} monHoc={monHoc} countQuestions={countQuestions} totals={getTotals()} />}
-          {activeTab === 'dac-ta' && <TabDacTa key="dac-ta" data={data} countQuestions={countQuestions} />}
-          {activeTab === 'tao-de' && <TabTaoDe key="tao-de" data={data} countQuestions={countQuestions} />}
+          {activeTab === 'ma-tran' && <TabMaTran key="ma-tran" data={data} monHoc={monHoc} countQuestions={countQuestions} totals={getTotals()} onPrev={() => setActiveTab('nhap-lieu')} onNext={() => setActiveTab('dac-ta')} />}
+          {activeTab === 'dac-ta' && <TabDacTa key="dac-ta" data={data} countQuestions={countQuestions} onPrev={() => setActiveTab('ma-tran')} onNext={() => setActiveTab('tao-de')} />}
+          {activeTab === 'tao-de' && <TabTaoDe key="tao-de" data={data} countQuestions={countQuestions} onPrev={() => setActiveTab('dac-ta')} />}
         </AnimatePresence>
       </main>
     </div>
@@ -289,7 +297,7 @@ export default function App() {
 
 // --- Các Tab Thành Phần ---
 
-function TabNhapLieu({ data, setData, tuDongPhanBo, tuDongPhanBoMoi, addChuong, removeChuong }: any) {
+function TabNhapLieu({ data, setData, tuDongPhanBo, tuDongPhanBoMoi, addChuong, removeChuong, onNext }: any) {
   const updateNoiDung = (cIdx: number, nIdx: number, val: any) => {
     const newData = [...data];
     newData[cIdx].noiDungs[nIdx] = { ...newData[cIdx].noiDungs[nIdx], ...val };
@@ -474,11 +482,21 @@ function TabNhapLieu({ data, setData, tuDongPhanBo, tuDongPhanBoMoi, addChuong, 
           </div>
         </div>
       ))}
+
+      {/* Nút điều hướng */}
+      <div className="flex justify-end mt-6">
+        <button
+          onClick={onNext}
+          className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 text-sm"
+        >
+          Xem Ma trận đề <ChevronRight className="w-5 h-5" />
+        </button>
+      </div>
     </motion.div>
   );
 }
 
-function TabMaTran({ data, monHoc, countQuestions, totals }: any) {
+function TabMaTran({ data, monHoc, countQuestions, totals, onPrev, onNext }: any) {
   return (
     <motion.div 
       initial={{ opacity: 0, scale: 0.98 }} 
@@ -563,11 +581,30 @@ function TabMaTran({ data, monHoc, countQuestions, totals }: any) {
           <p className="text-2xl font-black text-rose-900">{Math.round((totals.p3/22)*100)}% <span className="text-sm font-normal text-rose-600">tổng số câu</span></p>
         </div>
       </div>
+
+      {/* Nút điều hướng */}
+      <div className="flex justify-between mt-6">
+        <button onClick={onPrev} className="flex items-center gap-2 px-6 py-2.5 border border-slate-200 rounded-2xl font-bold text-sm hover:bg-slate-50 transition-all text-slate-600">
+          ← Nhập liệu
+        </button>
+        <button onClick={onNext} className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 text-sm">
+          Xem Ma trận đặc tả <ChevronRight className="w-5 h-5" />
+        </button>
+      </div>
     </motion.div>
   );
 }
 
-function TabDacTa({ data, countQuestions }: any) {
+function TabDacTa({ data, countQuestions, onPrev, onNext }: any) {
+  // Helper lấy yêu cầu cần đạt theo mức độ
+  const getYeuCau = (tenBai: string, mIdx: number, yeuCauNhap: string): { text: string; isAuto: boolean } => {
+    if (yeuCauNhap && yeuCauNhap.trim()) return { text: yeuCauNhap, isAuto: false };
+    const found = findYeuCau(tenBai);
+    if (!found) return { text: '---', isAuto: false };
+    const map = [found.nhanBiet, found.thongHieu, found.vanDung, found.vanDungCao];
+    return { text: map[mIdx] || '---', isAuto: true };
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0 }} 
@@ -579,6 +616,14 @@ function TabDacTa({ data, countQuestions }: any) {
         <h2 className="text-2xl font-black uppercase tracking-tight">BẢNG MA TRẬN ĐẶC TẢ CHI TIẾT ĐỀ KIỂM TRA</h2>
         <p className="text-slate-500 font-bold mt-1">HƯỚNG DẪN CHẤM VÀ ĐÁNH GIÁ NĂNG LỰC</p>
         <div className="w-20 h-1 bg-indigo-600 mx-auto mt-4 rounded-full"></div>
+        <div className="mt-4 flex justify-center gap-4 text-[10px]">
+          <span className="flex items-center gap-1.5 text-slate-600">
+            <span className="w-3 h-3 rounded-full bg-slate-200 inline-block"></span>Nhập tay
+          </span>
+          <span className="flex items-center gap-1.5 text-indigo-500">
+            <span className="w-3 h-3 rounded-full bg-indigo-100 border border-indigo-300 inline-block"></span>Tự động từ CSDL chuẩn
+          </span>
+        </div>
       </div>
 
       <table className="w-full border-collapse border border-slate-300 text-[11px]">
@@ -594,24 +639,45 @@ function TabDacTa({ data, countQuestions }: any) {
           </tr>
         </thead>
         <tbody>
-          {data.map((c: any, cIdx: number) => c.noiDungs.map((nd: any, nIdx: number) => nd.mucDos.map((md: any, mIdx: number) => (
-            <tr key={`${cIdx}-${nIdx}-${mIdx}`} className="hover:bg-slate-50 transition-colors">
-              {mIdx === 0 && <td rowSpan={4} className="border border-slate-200 p-3 text-center font-bold text-slate-400">{nIdx + 1}</td>}
-              {mIdx === 0 && <td rowSpan={4} className="border border-slate-200 p-3 font-bold text-slate-700">{nd.tenNoiDung}</td>}
-              <td className={cn("border border-slate-200 p-3 font-bold text-center", LEVELS[mIdx].color)}>{LEVELS[mIdx].name}</td>
-              <td className="border border-slate-200 p-3 text-justify leading-relaxed text-slate-600">{md.yeuCau || '---'}</td>
-              <td className="border border-slate-200 p-3 text-center font-bold text-emerald-700 bg-emerald-50/20">{md.qs.nlc || ''}</td>
-              <td className="border border-slate-200 p-3 text-center font-bold text-amber-700 bg-amber-50/20">{mIdx === 0 ? (md.qs.ds || '') : ''}</td>
-              <td className="border border-slate-200 p-3 text-center font-bold text-rose-700 bg-rose-50/20">{md.qs.tln || ''}</td>
-            </tr>
-          ))))}
+          {data.map((c: any, cIdx: number) => c.noiDungs.map((nd: any, nIdx: number) => nd.mucDos.map((md: any, mIdx: number) => {
+            const { text: yeuCauText, isAuto } = getYeuCau(nd.tenNoiDung, mIdx, md.yeuCau);
+            return (
+              <tr key={`${cIdx}-${nIdx}-${mIdx}`} className="hover:bg-slate-50 transition-colors">
+                {mIdx === 0 && <td rowSpan={4} className="border border-slate-200 p-3 text-center font-bold text-slate-400">{nIdx + 1}</td>}
+                {mIdx === 0 && <td rowSpan={4} className="border border-slate-200 p-3 font-bold text-slate-700">{nd.tenNoiDung}</td>}
+                <td className={cn("border border-slate-200 p-3 font-bold text-center", LEVELS[mIdx].color)}>{LEVELS[mIdx].name}</td>
+                <td className={cn(
+                  "border border-slate-200 p-3 text-justify leading-relaxed",
+                  isAuto ? "text-indigo-600 italic bg-indigo-50/30" : "text-slate-600"
+                )}>
+                  {yeuCauText}
+                  {isAuto && (
+                    <span className="ml-1 text-[8px] font-bold text-indigo-400 not-italic">[auto]</span>
+                  )}
+                </td>
+                <td className="border border-slate-200 p-3 text-center font-bold text-emerald-700 bg-emerald-50/20">{md.qs.nlc || ''}</td>
+                <td className="border border-slate-200 p-3 text-center font-bold text-amber-700 bg-amber-50/20">{mIdx === 0 ? (md.qs.ds || '') : ''}</td>
+                <td className="border border-slate-200 p-3 text-center font-bold text-rose-700 bg-rose-50/20">{md.qs.tln || ''}</td>
+              </tr>
+            );
+          })))}
         </tbody>
       </table>
+
+      {/* Nút điều hướng */}
+      <div className="flex justify-between mt-6">
+        <button onClick={onPrev} className="flex items-center gap-2 px-6 py-2.5 border border-slate-200 rounded-2xl font-bold text-sm hover:bg-slate-50 transition-all text-slate-600">
+          ← Ma trận
+        </button>
+        <button onClick={onNext} className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 text-sm">
+          Tạo đề thi <ChevronRight className="w-5 h-5" />
+        </button>
+      </div>
     </motion.div>
   );
 }
 
-function TabTaoDe({ data, countQuestions }: any) {
+function TabTaoDe({ data, countQuestions, onPrev }: any) {
   const [exam, setExam] = useState<any[]>([]);
   const mathRef = useMathRender([exam]);
 
@@ -642,16 +708,16 @@ function TabTaoDe({ data, countQuestions }: any) {
 
   const handleGenerateExam = () => {
     const finalExam: any[] = [];
-    let nlcCount = 1, dsCount = 1, tlnCount = 1;
+    let nlcCount = 1, dsCount = 1, tlnCount = 0;
 
     // Duyệt qua từng Chương -> Từng Nội dung trong Data
     data.forEach((chuong: any) => {
       chuong.noiDungs.forEach((nd: any) => {
-        // Duyệt qua 4 mức độ: 0:NB, 1:TH, 2:VD, 3:VDC
+
+        // --- 1. Sinh câu Trắc nghiệm nhiều phương án (NLC) ---
+        // Duyệt 4 mức độ cho NLC
         nd.mucDos.forEach((md: any, mIdx: number) => {
           const mucDoTen = LEVELS[mIdx].name;
-
-          // --- 1. Sinh câu Trắc nghiệm nhiều phương án (NLC) ---
           const nNLC = countQuestions(md.qs.nlc);
           for (let i = 0; i < nNLC; i++) {
             const qData = pickFromBank(nd.tenNoiDung, 'nlc', mucDoTen);
@@ -663,48 +729,111 @@ function TabTaoDe({ data, countQuestions }: any) {
               mucDo: mucDoTen,
               chuong: chuong.tenChuong,
               bai: nd.tenNoiDung,
-              dapAn: qData.dapAn
-            });
-          }
-
-          // --- 2. Sinh câu Đúng/Sai (Chỉ lấy ở mức Nhận biết theo form nhập liệu) ---
-          if (mIdx === 0) {
-            const nDS = countQuestions(md.qs.ds);
-            for (let i = 0; i < nDS; i++) {
-              const qData = pickFromBank(nd.tenNoiDung, 'ds', 'Hỗn hợp');
-              finalExam.push({
-                id: `ds-${dsCount}`,
-                phan: 'II',
-                stt: dsCount++,
-                noiDung: qData.noiDungCauHoi,
-                chuong: chuong.tenChuong,
-                bai: nd.tenNoiDung,
-                dapAn: qData.dapAn
-              });
-            }
-          }
-
-          // --- 3. Sinh câu Trả lời ngắn ---
-          const nTLN = countQuestions(md.qs.tln);
-          for (let i = 0; i < nTLN; i++) {
-            const qData = pickFromBank(nd.tenNoiDung, 'tln', mucDoTen);
-            finalExam.push({
-              id: `tln-${tlnCount}`,
-              phan: 'III',
-              stt: tlnCount++,
-              noiDung: qData.noiDungCauHoi,
-              mucDo: mucDoTen,
-              chuong: chuong.tenChuong,
-              bai: nd.tenNoiDung,
+              yeuCau: md.yeuCau || '',
               dapAn: qData.dapAn
             });
           }
         });
+
+        // --- 2. Sinh câu Đúng/Sai (Chỉ lấy ở mức Nhận biết theo form nhập liệu) ---
+        const nDS = countQuestions(nd.mucDos[0]?.qs?.ds || '');
+        for (let i = 0; i < nDS; i++) {
+          const qData = pickFromBank(nd.tenNoiDung, 'ds', 'Hỗn hợp');
+          finalExam.push({
+            id: `ds-${dsCount}`,
+            phan: 'II',
+            stt: dsCount++,
+            noiDung: qData.noiDungCauHoi,
+            chuong: chuong.tenChuong,
+            bai: nd.tenNoiDung,
+            yeuCau: nd.mucDos[0]?.yeuCau || '',
+            dapAn: qData.dapAn
+          });
+        }
+
+        // --- 3. Sinh câu Trả lời ngắn (tách theo từng mức độ) ---
+
+        // 3a. Mức Nhận biết (NB)
+        const nTlnNB = countQuestions(nd.mucDos[0]?.qs?.tln || '');
+        for (let k = 0; k < nTlnNB; k++) {
+          const qData = pickFromBank(nd.tenNoiDung, 'tln', 'Nhận biết');
+          tlnCount++;
+          finalExam.push({
+            id: `tln-${tlnCount}`,
+            phan: 'III',
+            stt: tlnCount,
+            noiDung: qData.noiDungCauHoi,
+            mucDo: 'Nhận biết',
+            chuong: chuong.tenChuong,
+            bai: nd.tenNoiDung,
+            yeuCau: nd.mucDos[0]?.yeuCau || '',
+            dapAn: qData.dapAn
+          });
+        }
+
+        // 3b. Mức Thông hiểu (TH)
+        const nTlnTH = countQuestions(nd.mucDos[1]?.qs?.tln || '');
+        for (let k = 0; k < nTlnTH; k++) {
+          const qData = pickFromBank(nd.tenNoiDung, 'tln', 'Thông hiểu');
+          tlnCount++;
+          finalExam.push({
+            id: `tln-${tlnCount}`,
+            phan: 'III',
+            stt: tlnCount,
+            noiDung: qData.noiDungCauHoi,
+            mucDo: 'Thông hiểu',
+            chuong: chuong.tenChuong,
+            bai: nd.tenNoiDung,
+            yeuCau: nd.mucDos[1]?.yeuCau || '',
+            dapAn: qData.dapAn
+          });
+        }
+
+        // 3c. Mức Vận dụng (VD) - từ mucDos[2]
+        const tlnVDRaw = nd.mucDos[2]?.qs?.tln || '';
+        const tlnVDTokens = tlnVDRaw.split(/[,;\s]+/).filter((s: string) => s && s.match(/\d/));
+        tlnVDTokens.forEach((token: string, index: number) => {
+          // Câu cuối cùng trong pool VD được xếp là VDC
+          const isVDC = (index === tlnVDTokens.length - 1 && tlnVDTokens.length > 1);
+          const mucDoPick = isVDC ? 'Vận dụng cao' : 'Vận dụng';
+          const qData = pickFromBank(nd.tenNoiDung, 'tln', mucDoPick);
+          tlnCount++;
+          finalExam.push({
+            id: `tln-${tlnCount}`,
+            phan: 'III',
+            stt: tlnCount,
+            noiDung: qData.noiDungCauHoi,
+            mucDo: mucDoPick,
+            chuong: chuong.tenChuong,
+            bai: nd.tenNoiDung,
+            yeuCau: nd.mucDos[2]?.yeuCau || '',
+            dapAn: qData.dapAn
+          });
+        });
+
+        // 3d. Mức Vận dụng cao (VDC) - từ mucDos[3]
+        const nTlnVDC = countQuestions(nd.mucDos[3]?.qs?.tln || '');
+        for (let k = 0; k < nTlnVDC; k++) {
+          const qData = pickFromBank(nd.tenNoiDung, 'tln', 'Vận dụng cao');
+          tlnCount++;
+          finalExam.push({
+            id: `tln-${tlnCount}`,
+            phan: 'III',
+            stt: tlnCount,
+            noiDung: qData.noiDungCauHoi,
+            mucDo: 'Vận dụng cao',
+            chuong: chuong.tenChuong,
+            bai: nd.tenNoiDung,
+            yeuCau: nd.mucDos[3]?.yeuCau || '',
+            dapAn: qData.dapAn
+          });
+        }
       });
     });
 
     setExam(finalExam);
   };
+
 
 
   return (
