@@ -78,91 +78,88 @@ export default function App() {
   const tuDongPhanBo = () => {
     const newData = JSON.parse(JSON.stringify(data));
     const allItems: any[] = [];
+    
+    // Gom tất cả các đơn vị kiến thức vào một danh sách phẳng
     newData.forEach((c: any, cIdx: number) => {
       c.noiDungs.forEach((nd: any, nIdx: number) => {
-        allItems.push({ cIdx, nIdx, soTiet: nd.soTiet || 0 });
+        allItems.push({ cIdx, nIdx, soTiet: nd.soTiet || 0, ten: nd.tenNoiDung });
       });
     });
 
     const totalTiet = allItems.reduce((acc: number, it: any) => acc + it.soTiet, 0);
+    if (totalTiet === 0) return alert("Vui lòng nhập 'Số tiết' để tính toán!");
 
-    if (totalTiet === 0) return alert("Vui lòng nhập 'Số tiết' để máy tính toán!");
-
-    // Reset toàn bộ câu hỏi cũ
+    // Reset toàn bộ dữ liệu câu hỏi cũ
     allItems.forEach((item: any) => {
       const nd = newData[item.cIdx].noiDungs[item.nIdx];
       nd.mucDos.forEach((m: any) => { m.qs.nlc = ''; m.qs.ds = ''; m.qs.tln = ''; });
     });
 
-    // --- BƯỚC 1: ĐẢM BẢO MỖI DÒNG CÓ ÍT NHẤT 1 CÂU (Ưu tiên NLC - NB) ---
-    let i1 = 1, i2 = 1, i3 = 1;
-    let allocatedNLC = 0;
-    
-    // Những dòng có số tiết > 0 sẽ được cấp 1 câu NLC-NB làm "vốn"
-    allItems.forEach((item: any) => {
-      if (allocatedNLC < 12) {
-        const nd = newData[item.cIdx].noiDungs[item.nIdx];
-        nd.mucDos[0].qs.nlc = (i1++).toString();
-        allocatedNLC++;
-      }
-    });
-
-    // --- BƯỚC 2: PHÂN BỔ SỐ CÂU CÒN LẠI THEO TỶ LỆ SỐ TIẾT ---
-    const distributeRemaining = (totalTarget: number, currentlyAllocated: number) => {
-      const remain = totalTarget - currentlyAllocated;
-      if (remain <= 0) return allItems.map(() => 0);
-      
-      const exact = allItems.map((it: any) => (it.soTiet / totalTiet) * remain);
+    // Hàm bổ trợ phân phối số câu dựa trên tỷ lệ số tiết (Largest Remainder Method)
+    const distribute = (totalTarget: number) => {
+      const exact = allItems.map((it: any) => (it.soTiet / totalTiet) * totalTarget);
       const fl = exact.map((v: number) => Math.floor(v));
-      let remCount = remain - fl.reduce((a: number, b: number) => a + b, 0);
+      let remCount = totalTarget - fl.reduce((a: number, b: number) => a + b, 0);
       const diffs = exact.map((v: number, i: number) => ({ r: v - fl[i], i })).sort((a, b) => b.r - a.r);
       for (let k = 0; k < remCount; k++) fl[diffs[k].i]++;
       return fl;
     };
 
-    // NLC: Tổng 12 câu. Đã cấp allocatedNLC câu NB. 
-    // Còn lại chia cho TH và bổ sung nốt vào NB.
-    const targetNB = 7; // Mục tiêu 7 câu NB
-    const targetTH = 5; // Mục tiêu 5 câu TH
+    // 1. Phân bổ Đúng/Sai (Tổng 4 câu)
+    const allocDS = distribute(4);
     
-    const remainNB = distributeRemaining(targetNB, allocatedNLC); 
-    const remainTH = distributeRemaining(targetTH, 0);
-    
-    // Đúng/Sai: 4 câu
-    const dsAlloc = distributeRemaining(4, 0);
-    
-    // Trả lời ngắn: 6 câu (2TH - 2VD - 2VDC)
-    const tlnTH = distributeRemaining(2, 0);
-    const tlnVD = distributeRemaining(2, 0);
-    const tlnVDC = distributeRemaining(2, 0);
+    // 2. Phân bổ Trả lời ngắn (Tổng 6 câu: 2 TH - 2 VD - 2 VDC)
+    const allocTLN_TH = distribute(2);
+    const allocTLN_VD = distribute(2);
+    const allocTLN_VDC = distribute(2);
 
-    // --- BƯỚC 3: ĐIỀN DỮ LIỆU VÀO DATA ---
+    // 3. Phân bổ Trắc nghiệm NLC (Tổng 12 câu: Chia mức NB và TH, bỏ VD)
+    // Ưu tiên cấp 1 câu NLC cho các dòng chưa có câu DS hoặc TLN nào
+    let nlcIdx = 1, dsIdx = 1, tlnIdx = 1;
+    const allocNLC_Total = distribute(12);
+
+    // --- THỰC HIỆN ĐIỀN DỮ LIỆU ---
     allItems.forEach((item: any, idx: number) => {
       const nd = newData[item.cIdx].noiDungs[item.nIdx];
 
-      // NLC - Nhận biết (Cộng thêm vào câu đã cấp ở Bước 1)
-      for (let k = 0; k < remainNB[idx]; k++) {
-        nd.mucDos[0].qs.nlc += (nd.mucDos[0].qs.nlc ? ', ' : '') + (i1++);
-      }
-      // NLC - Thông hiểu
-      for (let k = 0; k < remainTH[idx]; k++) {
-        nd.mucDos[1].qs.nlc += (nd.mucDos[1].qs.nlc ? ', ' : '') + (i1++);
+      // Gán Đúng/Sai (vào mức 0 - NB, trong ma trận sẽ tự hiểu cấu trúc 1NB-2TH-1VD)
+      for (let k = 0; k < allocDS[idx]; k++) {
+        nd.mucDos[0].qs.ds += (nd.mucDos[0].qs.ds ? ', ' : '') + (dsIdx++);
       }
 
-      // Đúng/Sai (Mặc định cấu trúc 1-2-1 trong bảng ma trận)
-      for (let k = 0; k < dsAlloc[idx]; k++) {
-        nd.mucDos[0].qs.ds += (nd.mucDos[0].qs.ds ? ', ' : '') + (i2++);
+      // Gán Trả lời ngắn
+      for (let k = 0; k < allocTLN_TH[idx]; k++) {
+        nd.mucDos[1].qs.tln += (nd.mucDos[1].qs.tln ? ', ' : '') + (tlnIdx++);
+      }
+      for (let k = 0; k < allocTLN_VD[idx]; k++) {
+        nd.mucDos[2].qs.tln += (nd.mucDos[2].qs.tln ? ', ' : '') + (tlnIdx++);
+      }
+      for (let k = 0; k < allocTLN_VDC[idx]; k++) {
+        nd.mucDos[3].qs.tln += (nd.mucDos[3].qs.tln ? ', ' : '') + (tlnIdx++);
       }
 
-      // Trả lời ngắn
-      for (let k = 0; k < tlnTH[idx]; k++) {
-        nd.mucDos[1].qs.tln += (nd.mucDos[1].qs.tln ? ', ' : '') + (i3++);
+      // Gán Trắc nghiệm NLC (Chia 60% NB - 40% TH)
+      const nNLC = allocNLC_Total[idx];
+      const nNB = Math.ceil(nNLC * 0.6);
+      const nTH = nNLC - nNB;
+
+      for (let k = 0; k < nNB; k++) {
+        nd.mucDos[0].qs.nlc += (nd.mucDos[0].qs.nlc ? ', ' : '') + (nlcIdx++);
       }
-      for (let k = 0; k < tlnVD[idx]; k++) {
-        nd.mucDos[2].qs.tln += (nd.mucDos[2].qs.tln ? ', ' : '') + (i3++);
+      for (let k = 0; k < nTH; k++) {
+        nd.mucDos[1].qs.nlc += (nd.mucDos[1].qs.nlc ? ', ' : '') + (nlcIdx++);
       }
-      for (let k = 0; k < tlnVDC[idx]; k++) {
-        nd.mucDos[3].qs.tln += (nd.mucDos[3].qs.tln ? ', ' : '') + (i3++);
+    });
+
+    // --- BƯỚC CUỐI: KIỂM TRA PHỦ KÍN ---
+    // Nếu vẫn còn dòng nào "trắng" câu hỏi, lấy 1 câu NLC từ dòng nhiều nhất chuyển sang
+    allItems.forEach((item: any) => {
+      const nd = newData[item.cIdx].noiDungs[item.nIdx];
+      const totalQ = (nd.mucDos[0].qs.nlc + nd.mucDos[1].qs.nlc + nd.mucDos[0].qs.ds + nd.mucDos[1].qs.tln).length;
+      
+      if (totalQ === 0) {
+        // Cấp "vé vớt" 1 câu NLC Nhận biết cho dòng bị trống
+        nd.mucDos[0].qs.nlc = "Bổ sung"; 
       }
     });
 
