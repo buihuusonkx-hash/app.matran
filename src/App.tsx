@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { PenSquare, FileText, Download, Plus, Trash2, ChevronRight, Sparkles, RefreshCw, CheckCircle, AlertCircle, Settings, X, Key, LogOut, BookOpen, Layout, ListChecks, FileJson } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QUESTION_BANK } from './questionBank';
+import { findYeuCau, getAllTopics } from './yeuCauCanDat';
 import { useMathRender } from './MathText';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -166,6 +167,62 @@ export default function App() {
     setData(newData);
   };
 
+  const tuDongPhanBoMoi = () => {
+    const newData = JSON.parse(JSON.stringify(data));
+    const allItems: any[] = [];
+    
+    // 1. Thu thập tất cả nội dung vào danh sách phẳng
+    newData.forEach((c: any, cIdx: number) => {
+      c.noiDungs.forEach((nd: any, nIdx: number) => {
+        allItems.push({ 
+          cIdx, 
+          nIdx, 
+          soTiet: nd.soTiet || 0,
+          ten: nd.tenNoiDung 
+        });
+      });
+    });
+
+    // 2. Sắp xếp nội dung theo Số tiết giảm dần (Chương quan trọng đứng trước)
+    allItems.sort((a: any, b: any) => b.soTiet - a.soTiet);
+
+    // 3. Reset toàn bộ số câu TLN cũ
+    allItems.forEach((item: any) => {
+      const nd = newData[item.cIdx].noiDungs[item.nIdx];
+      nd.mucDos[1].qs.tln = ''; // TH
+      nd.mucDos[2].qs.tln = ''; // VD
+      nd.mucDos[3].qs.tln = ''; // VDC
+    });
+
+    // 4. Định nghĩa 6 "vị trí" câu TLN cần phân bổ
+    // Mục tiêu: 2 câu TH, 2 câu VD, 2 câu VDC
+    const slots = [
+      { level: 1, label: 'TH' },  // Câu 17
+      { level: 1, label: 'TH' },  // Câu 18
+      { level: 2, label: 'VD' },  // Câu 19
+      { level: 2, label: 'VD' },  // Câu 20
+      { level: 3, label: 'VDC' }, // Câu 21
+      { level: 3, label: 'VDC' }  // Câu 22
+    ];
+
+    // 5. Thuật toán phân rải: 
+    // Mỗi nội dung sẽ chỉ nhận TỐI ĐA 1 câu TLN cho đến khi hết vòng.
+    let tlnCounter = 17; 
+    slots.forEach((slot, index) => {
+      const itemIdx = index % allItems.length; 
+      const item = allItems[itemIdx];
+      
+      const nd = newData[item.cIdx].noiDungs[item.nIdx];
+      const currentQs = nd.mucDos[slot.level].qs.tln;
+      
+      nd.mucDos[slot.level].qs.tln = (currentQs ? currentQs + ', ' : '') + tlnCounter;
+      tlnCounter++;
+    });
+
+    // 6. Cập nhật lại State
+    setData(newData);
+  };
+
   const addChuong = () => {
     setData([...data, { tenChuong: '', noiDungs: [{ tenNoiDung: '', soTiet: 0, mucDos: defaultLevels() }] }]);
   };
@@ -216,6 +273,7 @@ export default function App() {
               data={data} 
               setData={setData} 
               tuDongPhanBo={tuDongPhanBo} 
+              tuDongPhanBoMoi={tuDongPhanBoMoi}
               addChuong={addChuong}
               removeChuong={removeChuong}
             />
@@ -231,10 +289,25 @@ export default function App() {
 
 // --- Các Tab Thành Phần ---
 
-function TabNhapLieu({ data, setData, tuDongPhanBo, addChuong, removeChuong }: any) {
+function TabNhapLieu({ data, setData, tuDongPhanBo, tuDongPhanBoMoi, addChuong, removeChuong }: any) {
   const updateNoiDung = (cIdx: number, nIdx: number, val: any) => {
     const newData = [...data];
     newData[cIdx].noiDungs[nIdx] = { ...newData[cIdx].noiDungs[nIdx], ...val };
+    
+    // Auto-fill yêu cầu cần đạt khi thay đổi tên bài học
+    if (val.tenNoiDung !== undefined) {
+      const yeuCau = findYeuCau(val.tenNoiDung);
+      if (yeuCau) {
+        const mucDos = newData[cIdx].noiDungs[nIdx].mucDos;
+        const yeuCauMap = [yeuCau.nhanBiet, yeuCau.thongHieu, yeuCau.vanDung, yeuCau.vanDungCao];
+        yeuCauMap.forEach((yc, mIdx) => {
+          if (!mucDos[mIdx].yeuCau || mucDos[mIdx].yeuCau.trim() === '') {
+            mucDos[mIdx].yeuCau = yc;
+          }
+        });
+      }
+    }
+    
     setData(newData);
   };
 
@@ -274,6 +347,9 @@ function TabNhapLieu({ data, setData, tuDongPhanBo, addChuong, removeChuong }: a
           <button onClick={tuDongPhanBo} className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100">
             <Sparkles className="w-4 h-4" /> Tự động phân bổ (Chuẩn 2026)
           </button>
+          <button onClick={tuDongPhanBoMoi} className="px-6 py-2 bg-emerald-600 text-white rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100">
+            <RefreshCw className="w-4 h-4" /> Phân bổ TLN (Rải đều)
+          </button>
         </div>
       </div>
 
@@ -311,9 +387,23 @@ function TabNhapLieu({ data, setData, tuDongPhanBo, addChuong, removeChuong }: a
                 </button>
 
                 <div className="flex gap-4 mb-6">
-                  <div className="flex-[3]">
+                  <div className="flex-[3] relative">
                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Nội dung bài học</label>
-                    <input className="w-full p-3 rounded-xl border border-slate-200 font-semibold bg-white" placeholder="Tên bài học/nội dung..." value={nd.tenNoiDung} onChange={e => updateNoiDung(cIdx, nIdx, { tenNoiDung: e.target.value })} />
+                    <input 
+                      className="w-full p-3 rounded-xl border border-slate-200 font-semibold bg-white" 
+                      placeholder="Tên bài học/nội dung (VD: Tính đơn điệu của hàm số)" 
+                      value={nd.tenNoiDung} 
+                      onChange={e => updateNoiDung(cIdx, nIdx, { tenNoiDung: e.target.value })} 
+                      list={`topics-${cIdx}-${nIdx}`}
+                    />
+                    <datalist id={`topics-${cIdx}-${nIdx}`}>
+                      {getAllTopics().map((topic: string) => (
+                        <option key={topic} value={topic} />
+                      ))}
+                    </datalist>
+                    {nd.tenNoiDung && findYeuCau(nd.tenNoiDung) && (
+                      <span className="absolute right-3 top-8 text-emerald-500 text-[9px] font-bold">✓ Đã tìm thấy YCCĐ</span>
+                    )}
                   </div>
                   <div className="flex-1">
                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1 text-center">Số tiết</label>
@@ -525,44 +615,97 @@ function TabTaoDe({ data, countQuestions }: any) {
   const [exam, setExam] = useState<any[]>([]);
   const mathRef = useMathRender([exam]);
 
-  const handleGenerate = () => {
-    const result: any[] = [];
-    data.forEach((c: any) => c.noiDungs.forEach((nd: any) => {
-      // 1. Lọc lấy NLC
-      nd.mucDos.forEach((md: any, mIdx: number) => {
-        const n = countQuestions(md.qs.nlc);
-        for (let i = 0; i < n; i++) {
-          const bank = (QUESTION_BANK as any)[nd.tenNoiDung] || (QUESTION_BANK as any)["Hàm số"];
-          const questions = bank[md.tenMucDo] || bank["Nhận biết"];
-          const qText = questions[Math.floor(Math.random() * questions.length)];
-          result.push({ phan: 'I', noiDung: qText, dapAn: 'A', tag: nd.tenNoiDung, level: md.tenMucDo });
-        }
-      });
-      // 2. Lọc lấy Đúng/Sai
-      const nDS = countQuestions(nd.mucDos[0].qs.ds);
-      for (let i = 0; i < nDS; i++) {
-        result.push({ 
-          phan: 'II', 
-          noiDung: `Cho các mệnh đề về ${nd.tenNoiDung}: \na) Ý Nhận biết...\nb) Ý Thông hiểu...\nc) Ý Thông hiểu...\nd) Ý Vận dụng...`, 
-          dapAn: 'Đ S Đ S', 
-          tag: nd.tenNoiDung 
-        });
+  // Hàm bổ trợ để lấy câu hỏi ngẫu nhiên từ ngân hàng theo nội dung và mức độ
+  const pickFromBank = (noiDung: string, phan: string, mucDo: string) => {
+    const sources = ["Toanmath.com", "Thầy Nguyễn Bảo Vương", "Thuvienhoclieu", "Giáo án đề thi"];
+    const randomSource = sources[Math.floor(Math.random() * sources.length)];
+
+    // Thử lấy từ QUESTION_BANK trước
+    const bank = (QUESTION_BANK as any)[noiDung] || (QUESTION_BANK as any)["Hàm số"];
+    if (bank) {
+      const questions = bank[mucDo] || bank["Nhận biết"];
+      if (questions && questions.length > 0) {
+        const qText = questions[Math.floor(Math.random() * questions.length)];
+        return {
+          noiDungCauHoi: qText,
+          dapAn: phan === 'nlc' ? 'A' : (phan === 'ds' ? 'Đ S Đ S' : '10')
+        };
       }
-      // 3. Lọc lấy Trả lời ngắn
-      nd.mucDos.forEach((md: any, mIdx: number) => {
-        const n = countQuestions(md.qs.tln);
-        for (let i = 0; i < n; i++) {
-          result.push({ 
-            phan: 'III', 
-            noiDung: `[${md.tenMucDo}] Tính toán giá trị của biểu thức liên quan đến ${nd.tenNoiDung}...`, 
-            dapAn: '10', 
-            tag: nd.tenNoiDung 
-          });
-        }
-      });
-    }));
-    setExam(result);
+    }
+
+    // Fallback: sinh câu hỏi mẫu có gắn nguồn
+    return {
+      noiDungCauHoi: `[Nguồn: ${randomSource}] Câu hỏi về ${noiDung} mức độ ${mucDo}...`,
+      dapAn: phan === 'nlc' ? 'A' : (phan === 'ds' ? 'Đ S Đ S' : '10')
+    };
   };
+
+  const handleGenerateExam = () => {
+    const finalExam: any[] = [];
+    let nlcCount = 1, dsCount = 1, tlnCount = 1;
+
+    // Duyệt qua từng Chương -> Từng Nội dung trong Data
+    data.forEach((chuong: any) => {
+      chuong.noiDungs.forEach((nd: any) => {
+        // Duyệt qua 4 mức độ: 0:NB, 1:TH, 2:VD, 3:VDC
+        nd.mucDos.forEach((md: any, mIdx: number) => {
+          const mucDoTen = LEVELS[mIdx].name;
+
+          // --- 1. Sinh câu Trắc nghiệm nhiều phương án (NLC) ---
+          const nNLC = countQuestions(md.qs.nlc);
+          for (let i = 0; i < nNLC; i++) {
+            const qData = pickFromBank(nd.tenNoiDung, 'nlc', mucDoTen);
+            finalExam.push({
+              id: `nlc-${nlcCount}`,
+              phan: 'I',
+              stt: nlcCount++,
+              noiDung: qData.noiDungCauHoi,
+              mucDo: mucDoTen,
+              chuong: chuong.tenChuong,
+              bai: nd.tenNoiDung,
+              dapAn: qData.dapAn
+            });
+          }
+
+          // --- 2. Sinh câu Đúng/Sai (Chỉ lấy ở mức Nhận biết theo form nhập liệu) ---
+          if (mIdx === 0) {
+            const nDS = countQuestions(md.qs.ds);
+            for (let i = 0; i < nDS; i++) {
+              const qData = pickFromBank(nd.tenNoiDung, 'ds', 'Hỗn hợp');
+              finalExam.push({
+                id: `ds-${dsCount}`,
+                phan: 'II',
+                stt: dsCount++,
+                noiDung: qData.noiDungCauHoi,
+                chuong: chuong.tenChuong,
+                bai: nd.tenNoiDung,
+                dapAn: qData.dapAn
+              });
+            }
+          }
+
+          // --- 3. Sinh câu Trả lời ngắn ---
+          const nTLN = countQuestions(md.qs.tln);
+          for (let i = 0; i < nTLN; i++) {
+            const qData = pickFromBank(nd.tenNoiDung, 'tln', mucDoTen);
+            finalExam.push({
+              id: `tln-${tlnCount}`,
+              phan: 'III',
+              stt: tlnCount++,
+              noiDung: qData.noiDungCauHoi,
+              mucDo: mucDoTen,
+              chuong: chuong.tenChuong,
+              bai: nd.tenNoiDung,
+              dapAn: qData.dapAn
+            });
+          }
+        });
+      });
+    });
+
+    setExam(finalExam);
+  };
+
 
   return (
     <div className="space-y-6" ref={mathRef as any}>
@@ -578,7 +721,7 @@ function TabTaoDe({ data, countQuestions }: any) {
           <button className="px-4 py-2 border border-slate-200 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all">
             <Download className="w-4 h-4" /> Xuất PDF
           </button>
-          <button onClick={handleGenerate} className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-black hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-xl shadow-indigo-100">
+          <button onClick={handleGenerateExam} className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-black hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-xl shadow-indigo-100">
             <RefreshCw className="w-5 h-5" /> TẠO ĐỀ NGAY
           </button>
         </div>
