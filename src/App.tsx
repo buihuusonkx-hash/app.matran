@@ -84,47 +84,86 @@ export default function App() {
       });
     });
 
-    const totalTiet = allItems.reduce((acc, it) => acc + it.soTiet, 0);
-    if (totalTiet === 0) return alert("Vui lòng nhập 'Số tiết'!");
+    const totalTiet = allItems.reduce((acc: number, it: any) => acc + it.soTiet, 0);
 
-    const lrm = (total: number) => {
-      if (totalTiet === 0) return allItems.map(() => 0);
-      const exact = allItems.map(it => (it.soTiet / totalTiet) * total);
-      const fl = exact.map(v => Math.floor(v));
-      let rem = total - fl.reduce((a, b) => a + b, 0);
-      exact.map((v, i) => ({ r: v - fl[i], i })).sort((a, b) => b.r - a.r).slice(0, rem).forEach(({ i }) => fl[i]++);
+    if (totalTiet === 0) return alert("Vui lòng nhập 'Số tiết' để máy tính toán!");
+
+    // Reset toàn bộ câu hỏi cũ
+    allItems.forEach((item: any) => {
+      const nd = newData[item.cIdx].noiDungs[item.nIdx];
+      nd.mucDos.forEach((m: any) => { m.qs.nlc = ''; m.qs.ds = ''; m.qs.tln = ''; });
+    });
+
+    // --- BƯỚC 1: ĐẢM BẢO MỖI DÒNG CÓ ÍT NHẤT 1 CÂU (Ưu tiên NLC - NB) ---
+    let i1 = 1, i2 = 1, i3 = 1;
+    let allocatedNLC = 0;
+    
+    // Những dòng có số tiết > 0 sẽ được cấp 1 câu NLC-NB làm "vốn"
+    allItems.forEach((item: any) => {
+      if (allocatedNLC < 12) {
+        const nd = newData[item.cIdx].noiDungs[item.nIdx];
+        nd.mucDos[0].qs.nlc = (i1++).toString();
+        allocatedNLC++;
+      }
+    });
+
+    // --- BƯỚC 2: PHÂN BỔ SỐ CÂU CÒN LẠI THEO TỶ LỆ SỐ TIẾT ---
+    const distributeRemaining = (totalTarget: number, currentlyAllocated: number) => {
+      const remain = totalTarget - currentlyAllocated;
+      if (remain <= 0) return allItems.map(() => 0);
+      
+      const exact = allItems.map((it: any) => (it.soTiet / totalTiet) * remain);
+      const fl = exact.map((v: number) => Math.floor(v));
+      let remCount = remain - fl.reduce((a: number, b: number) => a + b, 0);
+      const diffs = exact.map((v: number, i: number) => ({ r: v - fl[i], i })).sort((a, b) => b.r - a.r);
+      for (let k = 0; k < remCount; k++) fl[diffs[k].i]++;
       return fl;
     };
 
-    // Phân bổ NLC (12 câu): NB: 6, TH: 4, VD: 2
-    const allocNLC_NB = lrm(6);
-    const allocNLC_TH = lrm(4);
-    const allocNLC_VD = lrm(2);
-    // Phân bổ DS (4 câu)
-    const allocDS = lrm(4);
-    // Phân bổ TLN (6 câu): TH: 2, VD: 2, VDC: 2
-    const allocTLN_TH = lrm(2);
-    const allocTLN_VD = lrm(2);
-    const allocTLN_VDC = lrm(2);
+    // NLC: Tổng 12 câu. Đã cấp allocatedNLC câu NB. 
+    // Còn lại chia cho TH và bổ sung nốt vào NB.
+    const targetNB = 7; // Mục tiêu 7 câu NB
+    const targetTH = 5; // Mục tiêu 5 câu TH
+    
+    const remainNB = distributeRemaining(targetNB, allocatedNLC); 
+    const remainTH = distributeRemaining(targetTH, 0);
+    
+    // Đúng/Sai: 4 câu
+    const dsAlloc = distributeRemaining(4, 0);
+    
+    // Trả lời ngắn: 6 câu (2TH - 2VD - 2VDC)
+    const tlnTH = distributeRemaining(2, 0);
+    const tlnVD = distributeRemaining(2, 0);
+    const tlnVDC = distributeRemaining(2, 0);
 
-    let idx1 = 1, idx2 = 1, idx3 = 1;
-
-    allItems.forEach((item, i) => {
+    // --- BƯỚC 3: ĐIỀN DỮ LIỆU VÀO DATA ---
+    allItems.forEach((item: any, idx: number) => {
       const nd = newData[item.cIdx].noiDungs[item.nIdx];
-      nd.mucDos.forEach((md: any) => { md.qs.nlc = ''; md.qs.ds = ''; md.qs.tln = ''; });
 
-      // Gán NLC
-      for (let k = 0; k < allocNLC_NB[i]; k++) nd.mucDos[0].qs.nlc += (nd.mucDos[0].qs.nlc ? ', ' : '') + `${idx1++}`;
-      for (let k = 0; k < allocNLC_TH[i]; k++) nd.mucDos[1].qs.nlc += (nd.mucDos[1].qs.nlc ? ', ' : '') + `${idx1++}`;
-      for (let k = 0; k < allocNLC_VD[i]; k++) nd.mucDos[2].qs.nlc += (nd.mucDos[2].qs.nlc ? ', ' : '') + `${idx1++}`;
+      // NLC - Nhận biết (Cộng thêm vào câu đã cấp ở Bước 1)
+      for (let k = 0; k < remainNB[idx]; k++) {
+        nd.mucDos[0].qs.nlc += (nd.mucDos[0].qs.nlc ? ', ' : '') + (i1++);
+      }
+      // NLC - Thông hiểu
+      for (let k = 0; k < remainTH[idx]; k++) {
+        nd.mucDos[1].qs.nlc += (nd.mucDos[1].qs.nlc ? ', ' : '') + (i1++);
+      }
 
-      // Gán DS (Mỗi câu mặc định cấu trúc 1-2-1)
-      for (let k = 0; k < allocDS[i]; k++) nd.mucDos[0].qs.ds += (nd.mucDos[0].qs.ds ? ', ' : '') + `${idx2++}`;
+      // Đúng/Sai (Mặc định cấu trúc 1-2-1 trong bảng ma trận)
+      for (let k = 0; k < dsAlloc[idx]; k++) {
+        nd.mucDos[0].qs.ds += (nd.mucDos[0].qs.ds ? ', ' : '') + (i2++);
+      }
 
-      // Gán TLN
-      for (let k = 0; k < allocTLN_TH[i]; k++) nd.mucDos[1].qs.tln += (nd.mucDos[1].qs.tln ? ', ' : '') + `${idx3++}`;
-      for (let k = 0; k < allocTLN_VD[i]; k++) nd.mucDos[2].qs.tln += (nd.mucDos[2].qs.tln ? ', ' : '') + `${idx3++}`;
-      for (let k = 0; k < allocTLN_VDC[i]; k++) nd.mucDos[3].qs.tln += (nd.mucDos[3].qs.tln ? ', ' : '') + `${idx3++}`;
+      // Trả lời ngắn
+      for (let k = 0; k < tlnTH[idx]; k++) {
+        nd.mucDos[1].qs.tln += (nd.mucDos[1].qs.tln ? ', ' : '') + (i3++);
+      }
+      for (let k = 0; k < tlnVD[idx]; k++) {
+        nd.mucDos[2].qs.tln += (nd.mucDos[2].qs.tln ? ', ' : '') + (i3++);
+      }
+      for (let k = 0; k < tlnVDC[idx]; k++) {
+        nd.mucDos[3].qs.tln += (nd.mucDos[3].qs.tln ? ', ' : '') + (i3++);
+      }
     });
 
     setData(newData);
